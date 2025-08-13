@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa GPS na żywo</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <style>
+        body { font-family: system-ui, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { width: 100%; max-width: 700px; margin: 15px; padding: 25px 30px; background-color: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #1c1e21; margin-bottom: 20px; }
+        .data-point { display: flex; justify-content: space-between; align-items: center; margin: 15px 0; font-size: 1.1em; }
+        .label { font-weight: 600; color: #606770; }
+        .value { color: #1877f2; font-family: "Courier New", Courier, monospace; font-weight: bold; }
+        #map { height: 400px; width: 100%; margin-top: 20px; border-radius: 8px; border: 1px solid #ccc; background-color: #e9ebee; }
+        .controls { text-align: center; margin-top: 15px; font-size: 0.9em; }
+        #status { font-style: italic; text-align: center; color: #888; margin-top: 20px; padding-top: 15px; border-top: 1px solid #e9ebee;}
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Mapa GPS na żywo</h1>
+        <div id="map"></div>
+        <div class="controls">
+            <input type="checkbox" id="autocenter" checked>
+            <label for="autocenter">Automatycznie centruj na pinezce GPS</label>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Surowe dane</h2>
+        <div class="data-point"><span class="label">Szerokość geograficzna:</span><span class="value" id="lat">...</span></div>
+        <div class="data-point"><span class="label">Długość geograficzna:</span><span class="value" id="lon">...</span></div>
+        <div class="data-point"><span class="label">Wysokość (n.p.m.):</span><span class="value" id="alt">...</span></div>
+        <div class="data-point"><span class="label">Jakość sygnału:</span><span class="value" id="fix">...</span></div>
+        <div class="data-point"><span class="label">Liczba satelitów:</span><span class="value" id="sats">...</span></div>
+        <div id="status">...</div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+
+            let map;
+            let gpsMarker = null;
+            let homeMarker = null;
+
+            map = L.map('map').setView([51.109, 17.032], 12);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            }).addTo(map);
+
+            homeMarker = L.marker([51.109, 17.032]).addTo(map)
+                .bindPopup('<b>Nasza lokalizacja</b><br>Wrocław, Polska.<br>Oczekiwanie na sygnał GPS...')
+                .openPopup();
+
+            function updateGpsData() {
+                // To jest najważniejsza część - zapytanie do serwera
+                fetch('/data')
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log("Otrzymano dane z serwera:", data);
+
+                        // Aktualizacja pól tekstowych
+                        document.getElementById('lat').innerText = data.lat.toFixed(7);
+                        document.getElementById('lon').innerText = data.lon.toFixed(7);
+                        document.getElementById('alt').innerText = data.alt.toFixed(2) + ' m';
+                        document.getElementById('fix').innerText = data.fix;
+                        document.getElementById('sats').innerText = data.sats;
+                        document.getElementById('status').innerText = 'Status serwera: ' + data.status;
+
+                        // Aktualizacja mapy
+                        if ((data.fix === '2D-Fix' || data.fix === '3D-Fix') && data.lat !== 0) {
+                            const newPosition = [data.lat, data.lon];
+                            if (!gpsMarker) {
+                                gpsMarker = L.marker(newPosition).addTo(map);
+                                gpsMarker.bindPopup('<b>Twoja pozycja GPS</b>').openPopup();
+                                map.setView(newPosition, 16);
+                            } else {
+                                gpsMarker.setLatLng(newPosition);
+                            }
+                            if (document.getElementById('autocenter').checked) {
+                                map.panTo(newPosition);
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Błąd pobierania danych GPS:', error);
+                        document.getElementById('status').innerText = 'Błąd połączenia z serwerem.';
+                    });
+            }
+
+            updateGpsData();
+            setInterval(updateGpsData, 5000);
+        });
+    </script>
+
+</body>
+</html>
