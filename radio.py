@@ -4,7 +4,7 @@ import json
 
 # === Konfiguracja portu dla radia telemetrycznego ===
 # ZMIEŃ NA WŁAŚCIWY PORT I PRĘDKOŚĆ DLA TWOJEJ TELEMETRII
-RADIO_PORT = 'COM5'  # Przykładowy port, MUSI być inny niż GPS!
+RADIO_PORT = '/dev/ttyUSB0'  # Przykładowy port, MUSI być inny niż GPS!
 RADIO_BAUD = 57600  # Przykładowa prędkość
 
 
