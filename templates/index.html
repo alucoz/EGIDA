@@ -3,185 +3,201 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mapa GPS na żywo</title>
+    <title>Mapa GPS na żywo z pomiarem odległości</title>
 
-    <!-- Biblioteki Leaflet (bez zmian) -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-
-    <!-- USUNIĘTO: Linki do wtyczki siatki -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <style>
-        body { font-family: system-ui, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-        .container { width: 100%; max-width: 700px; margin: 15px; padding: 25px 30px; background-color: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-        h1, h2 { text-align: center; color: #1c1e21; margin-bottom: 20px; }
-        .data-point { display: flex; justify-content: space-between; align-items: center; margin: 15px 0; font-size: 1.1em; }
-        .label { font-weight: 600; color: #606770; }
-        .value { color: #1877f2; font-family: "Courier New", Courier, monospace; font-weight: bold; }
-        .value.manual { color: #28a745; } /* Zielony kolor dla ręcznego punktu */
-        .value.distance { color: #dc3545; } /* Czerwony kolor dla dystansu */
-        #map { height: 400px; width: 100%; margin-top: 20px; border-radius: 8px; border: 1px solid #ccc; background-color: #e9ebee; cursor: crosshair; }
-        .controls { text-align: center; margin-top: 15px; font-size: 0.9em; }
-        #status, #manual_status { font-style: italic; text-align: center; color: #888; margin-top: 20px; padding-top: 15px; border-top: 1px solid #e9ebee;}
-        .button-container { text-align: center; margin-top: 20px; }
-        button { background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-size: 1em; cursor: pointer; transition: background-color 0.2s; }
-        button:hover { background-color: #218838; }
-        button:disabled { background-color: #cccccc; cursor: not-allowed; }
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, sans-serif;
+        }
+        #map { width: 100%; height: 100%; }
+
+        /* panel boczny */
+        .sidebar {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            width: 200px;
+            background: rgba(0, 0, 0, 0.42);
+            color: #fff;
+            z-index: 1000;
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 12px;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.9);
+        }
+        .sidebar h2 { margin: 0 0 8px 0; font-size: 16px; text-align: center; }
+        .data-point { display: flex; justify-content: space-between; margin: 6px 0; }
+        .label { font-weight: 700; margin-right: 8px; }
+        .value { font-family: monospace; font-weight: 600; color: #e6f2ff; }
+        #status { margin-top: 8px; font-size: 11px; color: #dcdcdc; }
+        #manual_status { margin-top: 8px; font-size: 11px; color: #ffd; }
+        button#save_button {
+            display: block;
+            width: 100%;
+            margin-top: 10px;
+            padding: 10px 8px;
+            font-size: 14px;
+            background: rgba(40,167,69,0.95);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        button#save_button:disabled {
+            background: rgba(150,150,150,0.85);
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body>
+    <div id="map"></div>
 
-    <div class="container">
-        <h1>Mapa GPS na żywo</h1>
-        <p style="text-align: center; color: #606770;">Kliknij na mapę, aby umieścić pinezkę.</p>
-        <div id="map"></div>
-        <div class="controls">
-            <input type="checkbox" id="autocenter" checked>
-            <label for="autocenter">Automatycznie centruj na pinezce GPS</label>
-        </div>
-    </div>
-
-    <div class="container">
-        <h2>Ręcznie wybrany punkt</h2>
-        <div class="data-point">
-            <span class="label">Szerokość geograficzna:</span>
-            <span class="value manual" id="manual_lat">...</span>
-        </div>
-        <div class="data-point">
-            <span class="label">Długość geograficzna:</span>
-            <span class="value manual" id="manual_lon">...</span>
-        </div>
-        <div class="data-point">
-            <span class="label">Dystans od punktu GPS:</span>
-            <span class="value distance" id="distance">...</span>
-        </div>
-        <div class="button-container">
-            <button id="save_button" disabled>Zapisz punkt</button>
-        </div>
-        <div id="manual_status"></div>
-    </div>
-
-    <div class="container">
-        <h2>Dane z modułu GPS</h2>
-        <div class="data-point"><span class="label">Szerokość geograficzna:</span><span class="value" id="lat">...</span></div>
-        <div class="data-point"><span class="label">Długość geograficzna:</span><span class="value" id="lon">...</span></div>
-        <div class="data-point"><span class="label">Wysokość (n.p.m.):</span><span class="value" id="alt">...</span></div>
-        <div class="data-point"><span class="label">Jakość sygnału:</span><span class="value" id="fix">...</span></div>
-        <div class="data-point"><span class="label">Liczba satelitów:</span><span class="value" id="sats">...</span></div>
-        <div id="status">...</div>
+    <div class="sidebar" id="gpsPanel" aria-live="polite">
+        <h2>Dane GPS</h2>
+        <div class="data-point"><span class="label">Szerokość:</span><span class="value" id="lat">...</span></div>
+        <div class="data-point"><span class="label">Długość:</span><span class="value" id="lon">...</span></div>
+        <div class="data-point"><span class="label">Wysokość:</span><span class="value" id="alt">...</span></div>
+        <div class="data-point"><span class="label">Sygnał:</span><span class="value" id="fix">...</span></div>
+        <div class="data-point"><span class="label">Satelity:</span><span class="value" id="sats">...</span></div>
+        <div id="status">Status: oczekiwanie</div>
+        <div id="manual_status" aria-live="polite"></div>
+        <button id="save_button" disabled>Zapisz punkt</button>
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
+            const map = L.map('map').setView([51.109, 17.032], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap'
+            }).addTo(map);
 
-            let map;
             let gpsMarker = null;
-            let homeMarker = null;
             let manualMarker = null;
-            let distanceLine = null;
+            let distanceLine = null; // ZMIANA: Zmienna do przechowywania linii przerywanej
 
-            map = L.map('map').setView([51.109, 17.032], 12);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map);
+            // === LINIA TRASY GPS ===
+            let trackPoints = [];
+            let trackLine = L.polyline([], {color: 'red', weight: 3}).addTo(map);
 
-            // USUNIĘTO: Linia kodu dodająca siatkę do mapy
+            const elLat = document.getElementById('lat');
+            const elLon = document.getElementById('lon');
+            const elAlt = document.getElementById('alt');
+            const elFix = document.getElementById('fix');
+            const elSats = document.getElementById('sats');
+            const elStatus = document.getElementById('status');
+            const elManualStatus = document.getElementById('manual_status');
+            const saveButton = document.getElementById('save_button');
 
-            homeMarker = L.marker([51.109, 17.032]).addTo(map).bindPopup('<b>Nasza lokalizacja</b><br>Wrocław, Polska.').openPopup();
-
-            function updateDistanceAndLine() {
+            // ZMIANA: Funkcja do aktualizacji linii i odległości
+            function updateDistance() {
                 if (gpsMarker && manualMarker) {
                     const gpsPos = gpsMarker.getLatLng();
                     const manualPos = manualMarker.getLatLng();
-                    const distance = gpsPos.distanceTo(manualPos);
-                    const distanceDisplay = document.getElementById('distance');
-                    if (distance > 1000) {
-                        distanceDisplay.innerText = (distance / 1000).toFixed(2) + ' km';
-                    } else {
-                        distanceDisplay.innerText = distance.toFixed(0) + ' m';
-                    }
                     const points = [gpsPos, manualPos];
+
+                    // Oblicz odległość
+                    const distance = map.distance(gpsPos, manualPos);
+                    const distanceText = distance > 1000
+                        ? (distance / 1000).toFixed(2) + ' km'
+                        : distance.toFixed(0) + ' m';
+
+                    // Stwórz lub zaktualizuj linię przerywaną
                     if (!distanceLine) {
-                        distanceLine = L.polyline(points, {color: '#dc3545', dashArray: '5, 10'}).addTo(map);
+                        distanceLine = L.polyline(points, {
+                            color: 'blue',
+                            weight: 3,
+                            dashArray: '5, 10' // to tworzy efekt przerywania
+                        }).addTo(map);
                     } else {
                         distanceLine.setLatLngs(points);
                     }
-                } else {
-                    document.getElementById('distance').innerText = '...';
-                    if (distanceLine) {
-                        map.removeLayer(distanceLine);
-                        distanceLine = null;
-                    }
+
+                    // Wyświetl odległość
+                    elManualStatus.textContent = `Odległość do punktu: ${distanceText}`;
                 }
             }
 
-            map.on('click', function(e) {
+            // Klik na mapie -> marker ręczny
+            map.on('click', function (e) {
                 const coords = e.latlng;
-                document.getElementById('manual_lat').innerText = coords.lat.toFixed(7);
-                document.getElementById('manual_lon').innerText = coords.lng.toFixed(7);
-                document.getElementById('save_button').disabled = false;
-                document.getElementById('manual_status').innerText = "";
-
                 if (!manualMarker) {
-                    manualMarker = L.marker(coords, {draggable: true}).addTo(map);
-                    manualMarker.bindPopup('<b>Ręcznie wybrany punkt</b><br>Możesz mnie przeciągać!').openPopup();
+                    manualMarker = L.marker(coords, { draggable: true }).addTo(map);
+                    manualMarker.on('dragend', function () {
+                        updateDistance(); // ZMIANA: Aktualizuj odległość po przeciągnięciu
+                    });
                 } else {
                     manualMarker.setLatLng(coords);
                 }
 
-                updateDistanceAndLine();
-
-                manualMarker.on('dragend', function(event) {
-                    const marker = event.target;
-                    const position = marker.getLatLng();
-                    document.getElementById('manual_lat').innerText = position.lat.toFixed(7);
-                    document.getElementById('manual_lon').innerText = position.lng.toFixed(7);
-                    updateDistanceAndLine();
-                });
+                updateDistance(); // ZMIANA: Wywołaj funkcję po kliknięciu
+                saveButton.disabled = false;
             });
 
-            document.getElementById('save_button').addEventListener('click', function() {
-                if (!manualMarker) return;
+            // Zapis punktu
+            saveButton.addEventListener('click', function () {
+                if (!manualMarker) {
+                    elManualStatus.textContent = 'Brak wybranego punktu do zapisu.';
+                    return;
+                }
                 const coords = manualMarker.getLatLng();
+                saveButton.disabled = true;
+                elManualStatus.textContent = 'Trwa zapisywanie...';
+
                 fetch('/save_point', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ lat: coords.lat, lon: coords.lng }),
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ lat: coords.lat, lon: coords.lng })
                 })
-                .then(response => response.json())
-                .then(result => {
-                    document.getElementById('manual_status').innerText = result.message;
-                })
-                .catch(error => {
-                    document.getElementById('manual_status').innerText = 'Wystąpił błąd sieciowy.';
-                });
+                .then(resp => resp.json().catch(() => ({message: 'OK'})))
+                .then(result => { elManualStatus.textContent = result.message || 'Zapisano.'; })
+                .catch(err => { elManualStatus.textContent = 'Błąd: ' + err.message; })
+                .finally(() => { saveButton.disabled = false; });
             });
 
-            function updateGpsData() {
-                fetch('/data')
-                    .then(response => response.json())
-                    .then(data => {
-                        document.getElementById('lat').innerText = data.lat.toFixed(7);
-                        document.getElementById('lon').innerText = data.lon.toFixed(7);
-                        document.getElementById('alt').innerText = data.alt.toFixed(2) + ' m';
-                        document.getElementById('fix').innerText = data.fix;
-                        document.getElementById('sats').innerText = data.sats;
-                        document.getElementById('status').innerText = 'Status serwera: ' + data.status;
+            // Aktualizacja danych GPS
+            async function updateGpsData() {
+                try {
+                    const resp = await fetch('/data', { cache: 'no-store' });
+                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                    const data = await resp.json();
 
-                        if ((data.fix === '2D-Fix' || data.fix === '3D-Fix') && data.lat !== 0) {
-                            const newPosition = [data.lat, data.lon];
-                            if (!gpsMarker) {
-                                gpsMarker = L.marker(newPosition).addTo(map).bindPopup('<b>Twoja pozycja GPS</b>');
-                                map.setView(newPosition, 16);
-                            } else {
-                                gpsMarker.setLatLng(newPosition);
-                            }
-                            if (document.getElementById('autocenter').checked) {
-                                map.panTo(newPosition);
-                            }
-                            updateDistanceAndLine();
+                    elLat.textContent = (typeof data.lat === 'number') ? data.lat.toFixed(7) : (data.lat ?? '...');
+                    elLon.textContent = (typeof data.lon === 'number') ? data.lon.toFixed(7) : (data.lon ?? '...');
+                    elAlt.textContent = (typeof data.alt === 'number') ? (data.alt.toFixed(2) + ' m') : (data.alt ?? '...');
+                    elFix.textContent = data.fix ?? '...';
+                    elSats.textContent = (data.sats !== undefined) ? String(data.sats) : '...';
+                    elStatus.textContent = 'Status: ' + (data.status ?? 'brak');
+
+                    if ((data.fix === '2D-Fix' || data.fix === '3D-Fix') && data.lat && data.lon) {
+                        const pos = [data.lat, data.lon];
+
+                        // Marker GPS
+                        if (!gpsMarker) {
+                            gpsMarker = L.marker(pos).addTo(map).bindPopup('Twoja pozycja GPS');
+                            map.setView(pos, 15);
+                        } else {
+                            gpsMarker.setLatLng(pos);
                         }
-                    });
+
+                        // Dodaj punkt do trasy i zaktualizuj linię
+                        trackPoints.push(pos);
+                        trackLine.setLatLngs(trackPoints);
+
+                        updateDistance(); // ZMIANA: Aktualizuj linię i odległość, gdy pozycja GPS się zmieni
+                    }
+                } catch (e) {
+                    elStatus.textContent = 'Status: brak połączenia';
+                }
             }
 
+            updateGpsData();
             setInterval(updateGpsData, 5000);
         });
     </script>
