@@ -80,9 +80,7 @@
 
             let gpsMarker = null;
             let manualMarker = null;
-            let distanceLine = null; // ZMIANA: Zmienna do przechowywania linii przerywanej
-
-            // === LINIA TRASY GPS ===
+            let distanceLine = null; // linia między punktami
             let trackPoints = [];
             let trackLine = L.polyline([], {color: 'red', weight: 3}).addTo(map);
 
@@ -95,33 +93,34 @@
             const elManualStatus = document.getElementById('manual_status');
             const saveButton = document.getElementById('save_button');
 
-            // ZMIANA: Funkcja do aktualizacji linii i odległości
+            // Funkcja do aktualizacji linii i odległości w panelu
             function updateDistance() {
-                if (gpsMarker && manualMarker) {
-                    const gpsPos = gpsMarker.getLatLng();
-                    const manualPos = manualMarker.getLatLng();
-                    const points = [gpsPos, manualPos];
+                if (!manualMarker) return;
 
-                    // Oblicz odległość
-                    const distance = map.distance(gpsPos, manualPos);
-                    const distanceText = distance > 1000
-                        ? (distance / 1000).toFixed(2) + ' km'
-                        : distance.toFixed(0) + ' m';
+                const manualPos = manualMarker.getLatLng();
 
-                    // Stwórz lub zaktualizuj linię przerywaną
-                    if (!distanceLine) {
-                        distanceLine = L.polyline(points, {
-                            color: 'blue',
-                            weight: 3,
-                            dashArray: '5, 10' // to tworzy efekt przerywania
-                        }).addTo(map);
-                    } else {
-                        distanceLine.setLatLngs(points);
-                    }
-
-                    // Wyświetl odległość
-                    elManualStatus.textContent = `Odległość do punktu: ${distanceText}`;
+                if (!gpsMarker) {
+                    elManualStatus.textContent = "Odległość: brak sygnału GPS";
+                    return;
                 }
+
+                const gpsPos = gpsMarker.getLatLng();
+                const points = [gpsPos, manualPos];
+
+                // oblicz odległość
+                const distance = map.distance(gpsPos, manualPos);
+                const distanceText = distance > 1000
+                    ? (distance / 1000).toFixed(2) + ' km'
+                    : distance.toFixed(0) + ' m';
+
+                // linia przerywana
+                if (!distanceLine) {
+                    distanceLine = L.polyline(points, { color: 'blue', weight: 3, dashArray: '5,10' }).addTo(map);
+                } else {
+                    distanceLine.setLatLngs(points);
+                }
+
+                elManualStatus.textContent = `Odległość do punktu: ${distanceText}`;
             }
 
             // Klik na mapie -> marker ręczny
@@ -129,14 +128,11 @@
                 const coords = e.latlng;
                 if (!manualMarker) {
                     manualMarker = L.marker(coords, { draggable: true }).addTo(map);
-                    manualMarker.on('dragend', function () {
-                        updateDistance(); // ZMIANA: Aktualizuj odległość po przeciągnięciu
-                    });
+                    manualMarker.on('dragend', updateDistance);
                 } else {
                     manualMarker.setLatLng(coords);
                 }
-
-                updateDistance(); // ZMIANA: Wywołaj funkcję po kliknięciu
+                updateDistance();
                 saveButton.disabled = false;
             });
 
@@ -178,7 +174,6 @@
                     if ((data.fix === '2D-Fix' || data.fix === '3D-Fix') && data.lat && data.lon) {
                         const pos = [data.lat, data.lon];
 
-                        // Marker GPS
                         if (!gpsMarker) {
                             gpsMarker = L.marker(pos).addTo(map).bindPopup('Twoja pozycja GPS');
                             map.setView(pos, 15);
@@ -186,11 +181,10 @@
                             gpsMarker.setLatLng(pos);
                         }
 
-                        // Dodaj punkt do trasy i zaktualizuj linię
                         trackPoints.push(pos);
                         trackLine.setLatLngs(trackPoints);
 
-                        updateDistance(); // ZMIANA: Aktualizuj linię i odległość, gdy pozycja GPS się zmieni
+                        updateDistance(); // aktualizacja odległości i linii
                     }
                 } catch (e) {
                     elStatus.textContent = 'Status: brak połączenia';
