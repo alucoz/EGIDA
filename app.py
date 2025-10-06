@@ -4,34 +4,37 @@ import subprocess
 import sys
 import atexit
 
-# Nazwa pliku z danymi GPS
+# Pliki danych
 DATA_FILE = 'gps_data.json'
-# Nazwa pliku dla ręcznie dodanego punktu
 MANUAL_POINT_FILE = 'manual_point.json'
 
-gps_process = None
 app = Flask(__name__)
+gps_process = None # Zmienna do przechowywania procesu gps.py
 
+def kill_gps_process():
+    """Zabija proces gps.py przy zamykaniu aplikacji."""
+    global gps_process
+    if gps_process:
+        print("[app.py] Zamykanie procesu gps.py...")
+        gps_process.kill()
+        gps_process.wait()
+        print("[app.py] Proces gps.py zamknięty.")
 
 @app.route('/')
 def index():
     """Wyświetla główną stronę HTML."""
     return render_template('index.html')
 
-
 @app.route('/data')
 def get_data():
-    """Odczytuje dane GPS z pliku JSON i wysyła je do przeglądarki."""
+    """Odczytuje i zwraca najnowsze dane z pliku gps_data.json."""
     try:
         with open(DATA_FILE, 'r') as f:
             data = json.load(f)
             return jsonify(data)
     except (FileNotFoundError, json.JSONDecodeError):
-        return jsonify({
-            "status": "Oczekiwanie na utworzenie pliku przez gps.py...",
-            "fix": "Brak", "lat": 0, "lon": 0, "alt": 0, "sats": 0
-        })
-
+        # Zwróć domyślne dane, jeśli plik nie istnieje lub jest pusty
+        return jsonify({"status": "Oczekiwanie na sygnał GPS...", "fix": "Brak fixa"})
 
 @app.route('/save_point', methods=['POST'])
 def save_point():
@@ -43,7 +46,7 @@ def save_point():
     print(f"[app.py] Otrzymano żądanie /save_point z danymi: {data}")
 
     if 'lat' in data and 'lon' in data:
-        # Krok 1: Zapis do pliku (bez zmian)
+        # Krok 1: Zapis do pliku
         try:
             with open(MANUAL_POINT_FILE, 'w') as f:
                 json.dump(data, f, indent=4)
@@ -56,9 +59,6 @@ def save_point():
         try:
             print("[app.py] Uruchamianie procesu radio.py...")
             data_as_string = json.dumps(data)
-
-            # === POPRAWKA TUTAJ: Dodajemy encoding='utf-8' ===
-            # Wymusza to poprawne dekodowanie odpowiedzi z procesu potomnego.
             result = subprocess.run(
                 [sys.executable, 'radio.py', data_as_string],
                 capture_output=True, text=True, check=True, encoding='utf-8'
@@ -83,18 +83,8 @@ def save_point():
 
     return jsonify({"status": "error", "message": "Brakujące dane lat/lon"}), 400
 
-
-def kill_gps_process():
-    """Zabija proces gps.py przy zamykaniu aplikacji."""
-    global gps_process
-    if gps_process:
-        print("[app.py] Zamykanie procesu gps.py...")
-        gps_process.kill()
-        gps_process.wait()
-        print("[app.py] Proces gps.py zamknięty.")
-
-
 if __name__ == '__main__':
+    # Uruchom skrypt gps.py jako osobny proces w tle
     print("[app.py] Uruchamianie skryptu gps.py w tle...")
     try:
         gps_process = subprocess.Popen([sys.executable, 'gps.py'])
@@ -105,5 +95,5 @@ if __name__ == '__main__':
         sys.exit(1)
 
     print("\n[app.py] Uruchamianie serwera Flask.")
-    print("[app.py] Otwórz przeglądarkę i wejdź na http://127.0.0.1:5000")
+    print(f"[app.py] Otwórz przeglądarkę na innym urządzeniu w sieci i wejdź na http://<IP_RASPBERRY_PI>:5000")
     app.run(host='0.0.0.0', port=5000, debug=False)

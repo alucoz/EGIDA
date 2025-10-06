@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mapa GPS na żywo z pomiarem odległości</title>
+    <title>Mapa GPS z pomiarem odległości</title>
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -56,144 +56,133 @@
     </style>
 </head>
 <body>
-    <div id="map"></div>
+<div id="map"></div>
 
-    <div class="sidebar" id="gpsPanel" aria-live="polite">
-        <h2>Dane GPS</h2>
-        <div class="data-point"><span class="label">Szerokość:</span><span class="value" id="lat">...</span></div>
-        <div class="data-point"><span class="label">Długość:</span><span class="value" id="lon">...</span></div>
-        <div class="data-point"><span class="label">Wysokość:</span><span class="value" id="alt">...</span></div>
-        <div class="data-point"><span class="label">Sygnał:</span><span class="value" id="fix">...</span></div>
-        <div class="data-point"><span class="label">Satelity:</span><span class="value" id="sats">...</span></div>
-        <div id="status">Status: oczekiwanie</div>
-        <div id="manual_status" aria-live="polite"></div>
-        <button id="save_button" disabled>Zapisz punkt</button>
-    </div>
+<div class="sidebar" id="gpsPanel" aria-live="polite">
+    <h2>Dane GPS</h2>
+    <div class="data-point"><span class="label">Szerokość:</span><span class="value" id="lat">...</span></div>
+    <div class="data-point"><span class="label">Długość:</span><span class="value" id="lon">...</span></div>
+    <div class="data-point"><span class="label">Wysokość:</span><span class="value" id="alt">...</span></div>
+    <div class="data-point"><span class="label">Sygnał:</span><span class="value" id="fix">...</span></div>
+    <div class="data-point"><span class="label">Satelity:</span><span class="value" id="sats">...</span></div>
+    <div id="status">Status: oczekiwanie</div>
+    <div id="manual_status" aria-live="polite"></div>
+    <button id="save_button" disabled>Zapisz punkt</button>
+</div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const map = L.map('map').setView([51.109, 17.032], 13);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19,
-                attribution: '&copy; OpenStreetMap'
-            }).addTo(map);
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const map = L.map('map').setView([51.109, 17.032], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
 
-            let gpsMarker = null;
-            let manualMarker = null;
-            let distanceLine = null; // linia między punktami
-            let trackPoints = [];
-            let trackLine = L.polyline([], {color: 'red', weight: 3}).addTo(map);
+    let gpsMarker = null;
+    let manualMarker = null;
+    let distanceLine = null; // tylko jedna linia między punktami
 
-            const elLat = document.getElementById('lat');
-            const elLon = document.getElementById('lon');
-            const elAlt = document.getElementById('alt');
-            const elFix = document.getElementById('fix');
-            const elSats = document.getElementById('sats');
-            const elStatus = document.getElementById('status');
-            const elManualStatus = document.getElementById('manual_status');
-            const saveButton = document.getElementById('save_button');
+    const elLat = document.getElementById('lat');
+    const elLon = document.getElementById('lon');
+    const elAlt = document.getElementById('alt');
+    const elFix = document.getElementById('fix');
+    const elSats = document.getElementById('sats');
+    const elStatus = document.getElementById('status');
+    const elManualStatus = document.getElementById('manual_status');
+    const saveButton = document.getElementById('save_button');
 
-            // Funkcja do aktualizacji linii i odległości w panelu
-            function updateDistance() {
-                if (!manualMarker) return;
+    // Funkcja do aktualizacji linii i odległości
+    function updateDistance() {
+        if (!manualMarker || !gpsMarker) {
+            elManualStatus.textContent = "Odległość: brak punktu lub sygnału GPS";
+            return;
+        }
 
-                const manualPos = manualMarker.getLatLng();
+        const gpsPos = gpsMarker.getLatLng();
+        const manualPos = manualMarker.getLatLng();
 
+        const distance = map.distance(gpsPos, manualPos);
+        const distanceText = distance > 1000
+            ? (distance / 1000).toFixed(2) + ' km'
+            : distance.toFixed(0) + ' m';
+
+        // linia między punktami
+        if (!distanceLine) {
+            distanceLine = L.polyline([gpsPos, manualPos], { color: 'blue', weight: 3, dashArray: '5,10' }).addTo(map);
+        } else {
+            distanceLine.setLatLngs([gpsPos, manualPos]);
+        }
+
+        elManualStatus.textContent = `Odległość do punktu: ${distanceText}`;
+    }
+
+    // klik na mapie -> marker ręczny
+    map.on('click', function(e) {
+        const coords = e.latlng;
+        if (!manualMarker) {
+            manualMarker = L.marker(coords, { draggable: true }).addTo(map);
+            manualMarker.on('dragend', updateDistance);
+        } else {
+            manualMarker.setLatLng(coords);
+        }
+        updateDistance();
+        saveButton.disabled = false;
+    });
+
+    // zapis punktu
+    saveButton.addEventListener('click', function () {
+        if (!manualMarker) {
+            elManualStatus.textContent = 'Brak wybranego punktu do zapisu.';
+            return;
+        }
+        const coords = manualMarker.getLatLng();
+        saveButton.disabled = true;
+        elManualStatus.textContent = 'Trwa zapisywanie...';
+
+        fetch('/save_point', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lat: coords.lat, lon: coords.lng })
+        })
+        .then(resp => resp.json().catch(() => ({message: 'OK'})))
+        .then(result => { elManualStatus.textContent = result.message || 'Zapisano.'; })
+        .catch(err => { elManualStatus.textContent = 'Błąd: ' + err.message; })
+        .finally(() => { saveButton.disabled = false; });
+    });
+
+    // aktualizacja danych GPS
+    async function updateGpsData() {
+        try {
+            const resp = await fetch('/data', { cache: 'no-store' });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const data = await resp.json();
+
+            elLat.textContent = (typeof data.lat === 'number') ? data.lat.toFixed(7) : (data.lat ?? '...');
+            elLon.textContent = (typeof data.lon === 'number') ? data.lon.toFixed(7) : (data.lon ?? '...');
+            elAlt.textContent = (typeof data.alt === 'number') ? (data.alt.toFixed(2) + ' m') : (data.alt ?? '...');
+            elFix.textContent = data.fix ?? '...';
+            elSats.textContent = (data.sats !== undefined) ? String(data.sats) : '...';
+            elStatus.textContent = 'Status: ' + (data.status ?? 'brak');
+
+            if ((data.fix === '2D-Fix' || data.fix === '3D-Fix') && data.lat && data.lon) {
+                const pos = [data.lat, data.lon];
                 if (!gpsMarker) {
-                    elManualStatus.textContent = "Odległość: brak sygnału GPS";
-                    return;
-                }
-
-                const gpsPos = gpsMarker.getLatLng();
-                const points = [gpsPos, manualPos];
-
-                // oblicz odległość
-                const distance = map.distance(gpsPos, manualPos);
-                const distanceText = distance > 1000
-                    ? (distance / 1000).toFixed(2) + ' km'
-                    : distance.toFixed(0) + ' m';
-
-                // linia przerywana
-                if (!distanceLine) {
-                    distanceLine = L.polyline(points, { color: 'blue', weight: 3, dashArray: '5,10' }).addTo(map);
+                    gpsMarker = L.marker(pos).addTo(map).bindPopup('Twoja pozycja GPS');
+                    map.setView(pos, 15);
                 } else {
-                    distanceLine.setLatLngs(points);
+                    gpsMarker.setLatLng(pos);
                 }
 
-                elManualStatus.textContent = `Odległość do punktu: ${distanceText}`;
+                updateDistance(); // aktualizacja odległości i linii
             }
+        } catch (e) {
+            elStatus.textContent = 'Status: brak połączenia';
+        }
+    }
 
-            // Klik na mapie -> marker ręczny
-            map.on('click', function (e) {
-                const coords = e.latlng;
-                if (!manualMarker) {
-                    manualMarker = L.marker(coords, { draggable: true }).addTo(map);
-                    manualMarker.on('dragend', updateDistance);
-                } else {
-                    manualMarker.setLatLng(coords);
-                }
-                updateDistance();
-                saveButton.disabled = false;
-            });
-
-            // Zapis punktu
-            saveButton.addEventListener('click', function () {
-                if (!manualMarker) {
-                    elManualStatus.textContent = 'Brak wybranego punktu do zapisu.';
-                    return;
-                }
-                const coords = manualMarker.getLatLng();
-                saveButton.disabled = true;
-                elManualStatus.textContent = 'Trwa zapisywanie...';
-
-                fetch('/save_point', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ lat: coords.lat, lon: coords.lng })
-                })
-                .then(resp => resp.json().catch(() => ({message: 'OK'})))
-                .then(result => { elManualStatus.textContent = result.message || 'Zapisano.'; })
-                .catch(err => { elManualStatus.textContent = 'Błąd: ' + err.message; })
-                .finally(() => { saveButton.disabled = false; });
-            });
-
-            // Aktualizacja danych GPS
-            async function updateGpsData() {
-                try {
-                    const resp = await fetch('/data', { cache: 'no-store' });
-                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-                    const data = await resp.json();
-
-                    elLat.textContent = (typeof data.lat === 'number') ? data.lat.toFixed(7) : (data.lat ?? '...');
-                    elLon.textContent = (typeof data.lon === 'number') ? data.lon.toFixed(7) : (data.lon ?? '...');
-                    elAlt.textContent = (typeof data.alt === 'number') ? (data.alt.toFixed(2) + ' m') : (data.alt ?? '...');
-                    elFix.textContent = data.fix ?? '...';
-                    elSats.textContent = (data.sats !== undefined) ? String(data.sats) : '...';
-                    elStatus.textContent = 'Status: ' + (data.status ?? 'brak');
-
-                    if ((data.fix === '2D-Fix' || data.fix === '3D-Fix') && data.lat && data.lon) {
-                        const pos = [data.lat, data.lon];
-
-                        if (!gpsMarker) {
-                            gpsMarker = L.marker(pos).addTo(map).bindPopup('Twoja pozycja GPS');
-                            map.setView(pos, 15);
-                        } else {
-                            gpsMarker.setLatLng(pos);
-                        }
-
-                        trackPoints.push(pos);
-                        trackLine.setLatLngs(trackPoints);
-
-                        updateDistance(); // aktualizacja odległości i linii
-                    }
-                } catch (e) {
-                    elStatus.textContent = 'Status: brak połączenia';
-                }
-            }
-
-            updateGpsData();
-            setInterval(updateGpsData, 5000);
-        });
-    </script>
+    updateGpsData();
+    setInterval(updateGpsData, 5000);
+});
+</script>
 </body>
 </html>
