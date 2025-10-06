@@ -55,6 +55,6 @@ def read_and_save_ubx_data(serial_port, baud_rate):
             time.sleep(10)
 
 if __name__ == '__main__':
-    PORT_GPS = 'COM3'
+    PORT_GPS = '/dev/ttyUSB1'
     BAUD_RATE_GPS = 115200
     read_and_save_ubx_data(PORT_GPS, BAUD_RATE_GPS)
