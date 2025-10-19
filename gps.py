@@ -8,10 +8,7 @@ DATA_FILE = 'gps_data.json'
 # Interwał zapisu do pliku w sekundach
 WRITE_INTERVAL = 2
 
-# === ZMIEŃ NA WŁAŚCIWY PORT! ===
-# Nazwa portu szeregowego dla modułu GPS na Raspberry Pi
-# Najczęściej będzie to '/dev/ttyUSB0' lub '/dev/ttyACM0' dla GPS na USB
-# lub '/dev/ttyAMA0' dla GPS na pinach GPIO
+
 PORT_GPS = '/dev/ttyUSB0'
 # Zaktualizowana prędkość transmisji dla Twojego modułu GPS
 BAUD_RATE_GPS = 115200

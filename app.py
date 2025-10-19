@@ -4,6 +4,7 @@ import subprocess
 import sys
 import atexit
 
+
 # Pliki danych
 DATA_FILE = 'gps_data.json'
 MANUAL_POINT_FILE = 'manual_point.json'
