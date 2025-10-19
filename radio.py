@@ -5,7 +5,7 @@ import json
 # === ZMIEŃ NA WŁAŚCIWY PORT! ===
 # Nazwa portu szeregowego dla modułu radiowego na Raspberry Pi
 # Np. '/dev/ttyUSB1'
-RADIO_PORT = '/dev/ttyUSB1'
+RADIO_PORT = '/dev/serial0'
 # Upewnij się, że prędkość jest zgodna z konfiguracją radia
 RADIO_BAUD = 57600
 DEFAULT_ALTITUDE = 20.0
