@@ -8,11 +8,9 @@ DATA_FILE = 'gps_data.json'
 # Interwał zapisu do pliku w sekundach
 WRITE_INTERVAL = 2
 
-
 PORT_GPS = '/dev/ttyUSB0'
 # Zaktualizowana prędkość transmisji dla Twojego modułu GPS
 BAUD_RATE_GPS = 115200
-
 
 def read_and_save_ubx_data(serial_port, baud_rate):
     """
@@ -64,13 +62,16 @@ def read_and_save_ubx_data(serial_port, baud_rate):
                     except IOError as e:
                         print(f"[gps.py] BŁĄD zapisu do pliku: {e}")
 
+            # Jeśli strumień się skończy, retry
+            print("[gps.py] Strumień danych przerwany – retry za 5s.")
+            time.sleep(5)
+
         except serial.SerialException as e:
-            print(f"[gps.py] BŁĄD KRYTYCZNY portu '{serial_port}': {e}. Restart za 10s.")
+            print(f"[gps.py] BŁĄD portu '{serial_port}': {e}. Retry za 10s.")
             time.sleep(10)
         except Exception as e:
-            print(f"[gps.py] Nieoczekiwany błąd: {e}. Restart za 10s.")
+            print(f"[gps.py] Nieoczekiwany błąd: {e}. Retry za 10s.")
             time.sleep(10)
-
 
 if __name__ == '__main__':
     read_and_save_ubx_data(PORT_GPS, BAUD_RATE_GPS)

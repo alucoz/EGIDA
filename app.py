@@ -3,19 +3,19 @@ import json
 import subprocess
 import sys
 import atexit
-
+import os  # Dodane dla sprawdzenia, czy gps.py już działa
 
 # Pliki danych
 DATA_FILE = 'gps_data.json'
 MANUAL_POINT_FILE = 'manual_point.json'
 
 app = Flask(__name__)
-gps_process = None # Zmienna do przechowywania procesu gps.py
+gps_process = None  # Zmienna do przechowywania procesu gps.py
 
 def kill_gps_process():
     """Zabija proces gps.py przy zamykaniu aplikacji."""
     global gps_process
-    if gps_process:
+    if gps_process and gps_process.poll() is None:  # Sprawdź, czy proces żyje
         print("[app.py] Zamykanie procesu gps.py...")
         gps_process.kill()
         gps_process.wait()
@@ -65,9 +65,11 @@ def save_point():
                 capture_output=True, text=True, check=True, encoding='utf-8'
             )
             print(f"[app.py] Odpowiedź z radio.py (stdout): {result.stdout.strip()}")
+            if result.stderr:
+                print(f"[app.py] Ostrzeżenie z radio.py (stderr): {result.stderr.strip()}")
             return jsonify({
                 "status": "success",
-                "message": f"Punkt zapisany i wysłany!"
+                "message": "Punkt zapisany i wysłany!"
             })
         except FileNotFoundError:
             error_msg = "BŁĄD: Nie można znaleźć pliku 'radio.py'."
@@ -85,15 +87,20 @@ def save_point():
     return jsonify({"status": "error", "message": "Brakujące dane lat/lon"}), 400
 
 if __name__ == '__main__':
-    # Uruchom skrypt gps.py jako osobny proces w tle
-    print("[app.py] Uruchamianie skryptu gps.py w tle...")
-    try:
-        gps_process = subprocess.Popen([sys.executable, 'gps.py'])
-        atexit.register(kill_gps_process)
-        print("[app.py] Skrypt gps.py uruchomiony pomyślnie.")
-    except Exception as e:
-        print(f"[app.py] BŁĄD KRYTYCZNY podczas uruchamiania gps.py: {e}")
-        sys.exit(1)
+    # Sprawdź, czy gps.py już działa (unikaj duplikacji)
+    gps_running = any('gps.py' in line for line in os.popen('ps -Af').readlines())
+    if not gps_running:
+        # Uruchom skrypt gps.py jako osobny proces w tle
+        print("[app.py] Uruchamianie skryptu gps.py w tle...")
+        try:
+            gps_process = subprocess.Popen([sys.executable, 'gps.py'])
+            atexit.register(kill_gps_process)
+            print("[app.py] Skrypt gps.py uruchomiony pomyślnie.")
+        except Exception as e:
+            print(f"[app.py] BŁĄD KRYTYCZNY podczas uruchamiania gps.py: {e}")
+            sys.exit(1)
+    else:
+        print("[app.py] gps.py już działa – pomijam uruchomienie.")
 
     print("\n[app.py] Uruchamianie serwera Flask.")
     print(f"[app.py] Otwórz przeglądarkę na innym urządzeniu w sieci i wejdź na http://<IP_RASPBERRY_PI>:5000")
